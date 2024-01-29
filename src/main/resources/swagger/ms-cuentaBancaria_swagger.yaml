@@ -152,6 +152,25 @@ paths:
         '404':
           description: Recurso no encontrado
 
+  /movement/transfer:
+    post:
+      operationId: createTransfer
+      summary: Crear transferencia
+      tags:
+        - Movimientos Cuenta Bancaria
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Movement'
+      responses:
+        '201':
+          description: Transferencia creada exitosamente
+        '400':
+          description: Error en Request
+        '404':
+          description: Recurso no encontrado
+
   /movement/withdraw:
     post:
       operationId: createWithDraw
@@ -187,6 +206,58 @@ paths:
       responses:
         '200':
           description: Lista de movimientos de cuenta bancaria obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movement'
+        '400':
+          description: Error en request
+        '404':
+          description: Recurso no encontrado
+
+  /report/balance_account/{customer_id}:
+    get:
+      operationId: getBalanceAccount
+      summary: Obtener resumen de saldos promedios del mes en curso de los productos bancarios.
+      tags:
+        - Reportes
+      parameters:
+        - name: customer_id
+          in: path
+          description: ID del cliente
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reporte de saldos promedios.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceAccounts'
+        '400':
+          description: Error en request
+        '404':
+          description: Recurso no encontrado
+
+  /report/fee/{account_id}:
+    get:
+      operationId: getFeeByAccount
+      summary: Obtener las comisiones cobradas por cuenta bancaria.
+      tags:
+        - Reportes
+      parameters:
+        - name: account_id
+          in: path
+          description: ID de la cuenta
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reporte de saldos promedios.
           content:
             application/json:
               schema:
@@ -234,6 +305,10 @@ components:
           type: number
         fecha:
           type: string
+        fee:
+          type: number
+        destination:
+          type: string
     Holders:
       type: object
       properties:
@@ -241,3 +316,19 @@ components:
           type: string
         fullname:
           type: string
+    BalanceAccounts:
+      type: object
+      properties:
+        customerId:
+          type: string
+        summary_accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SummaryAccountBalance"
+    SummaryAccountBalance:
+      type: object
+      properties:
+        account_id:
+          type: string
+        balanceAvg:
+          type: number

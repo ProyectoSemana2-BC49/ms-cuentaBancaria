@@ -62,7 +62,9 @@ public class AccountValidator {
         .getTypeAccount()
         .equalsIgnoreCase(TypeAccountBank.AHORRO.toString())
         || accountValidate.getTypeAccount().equalsIgnoreCase(TypeAccountBank.CORRIENTE.toString())
-        || accountValidate.getTypeAccount().equalsIgnoreCase(TypeAccountBank.PLAZO_FIJO.toString());
+        || accountValidate.getTypeAccount().equalsIgnoreCase(TypeAccountBank.PLAZO_FIJO.toString())
+        || accountValidate.getTypeAccount().equalsIgnoreCase(TypeAccountBank.VIP.toString())
+        || accountValidate.getTypeAccount().equalsIgnoreCase(TypeAccountBank.PYME.toString());
     if (existTypeAccountBank.negate().test(account)) {
       throw new ErrorResponseException(EX_ERROR_TYPE_ACCOUNT,
           HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST);

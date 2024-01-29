@@ -59,6 +59,12 @@
 			<artifactId>spring-cloud-starter-vault-config</artifactId>
 			<version>3.0.5</version>
 		</dependency>
+		<!-- RXJava -->
+		<dependency>
+			<groupId>io.reactivex.rxjava3</groupId>
+			<artifactId>rxjava</artifactId>
+			<version>3.1.8</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -118,6 +124,32 @@
 						<phase>test</phase>
 						<goals>
 							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<version>3.1.1</version>
+				<dependencies>
+					<dependency>
+						<groupId>com.puppycrawl.tools</groupId>
+						<artifactId>checkstyle</artifactId>
+						<version>8.42</version>
+					</dependency>
+				</dependencies>
+				<configuration>
+					<configLocation>src/main/resources/google_checks_custom.xml</configLocation>
+					<failOnViolation>true</failOnViolation>
+					<consoleOutput>true</consoleOutput>
+				</configuration>
+				<executions>
+					<execution>
+						<id>checkstyle-validation</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
 						</goals>
 					</execution>
 				</executions>

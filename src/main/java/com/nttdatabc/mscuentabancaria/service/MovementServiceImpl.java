@@ -1,23 +1,31 @@
 package com.nttdatabc.mscuentabancaria.service;
 
-import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_MOVEMENT_BALANCE_INSUFFICIENT;
+import static com.nttdatabc.mscuentabancaria.utils.Constantes.FEE_LIMIT_TRANSACTION;
+import static com.nttdatabc.mscuentabancaria.utils.Constantes.TRANSACTION_FEE_FREE;
+import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateAccountDestination;
 import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateAccountRegister;
+import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateCurrentBalance;
 import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateMovementEmpty;
 import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateMovementNoNulls;
+import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateMovementTransferEmpty;
+import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateMovementTransferNoNulls;
 import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.validateMovements;
-import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.verifyTypeMovement;
 import static com.nttdatabc.mscuentabancaria.utils.MovementValidator.verifyValues;
 
 import com.nttdatabc.mscuentabancaria.model.Account;
 import com.nttdatabc.mscuentabancaria.model.Movement;
+import com.nttdatabc.mscuentabancaria.model.TypeMovement;
 import com.nttdatabc.mscuentabancaria.repository.MovementRepository;
 import com.nttdatabc.mscuentabancaria.utils.Utilitarios;
 import com.nttdatabc.mscuentabancaria.utils.exceptions.errors.ErrorResponseException;
+import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Observable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
 
 
 /**
@@ -31,56 +39,105 @@ public class MovementServiceImpl implements MovementService {
   private AccountServiceImpl accountServiceImpl;
 
   @Override
-  public void createMovementDepositService(Movement movement) throws ErrorResponseException {
-    validateMovementNoNulls(movement);
-    validateMovementEmpty(movement);
-    verifyTypeMovement(movement);
-    verifyValues(movement);
-    validateAccountRegister(movement.getAccountId(), accountServiceImpl);
+  public Completable createMovementDepositService(Movement movement) throws ErrorResponseException {
+    return Completable.fromAction(() -> {
+      validateMovementNoNulls(movement);
+      validateMovementEmpty(movement);
+      verifyValues(movement);
+      validateAccountRegister(movement.getAccountId(), accountServiceImpl);
 
-    List<Movement> listMovementByAccount = getMovementsByAccountIdService(movement.getAccountId());
-    Account accountFound = accountServiceImpl.getAccountByIdService(movement.getAccountId());
-    validateMovements(accountFound, listMovementByAccount);
+      movement.setId(Utilitarios.generateUuid());
+      movement.setFecha(LocalDateTime.now().toString());
+      movement.setTypeMovement(TypeMovement.DEPOSITO.toString());
+      movement.setFee(BigDecimal.valueOf(TRANSACTION_FEE_FREE));
 
-    movement.setId(Utilitarios.generateUuid());
-    movement.setFecha(LocalDateTime.now().toString());
-    movementRepository.save(movement);
+      List<Movement> listMovementByAccount = getMovementsByAccountIdService(movement.getAccountId()).blockingSingle();
+      Account accountFound = accountServiceImpl.getAccountByIdService(movement.getAccountId()).blockingGet();
+      validateMovements(accountFound, listMovementByAccount, movement);
 
-    //actualizar monto en cuenta bancaria
-    Account accountUpdate = accountServiceImpl.getAccountByIdService(movement.getAccountId());
-    accountUpdate.setCurrentBalance(accountUpdate.getCurrentBalance().add(movement.getMount()));
-    accountServiceImpl.updateAccountServide(accountUpdate);
+      movementRepository.save(movement);
+
+      //update mount in account bank
+      double mountUpdate = movement.getMount().doubleValue();
+      if (movement.getFee().doubleValue() == FEE_LIMIT_TRANSACTION) {
+        double feeTransaction = movement.getMount().doubleValue() * FEE_LIMIT_TRANSACTION;
+        mountUpdate = mountUpdate - feeTransaction;
+      }
+      Account accountUpdate = accountServiceImpl.getAccountByIdService(movement.getAccountId()).blockingGet();
+      accountUpdate.setCurrentBalance(accountUpdate.getCurrentBalance().add(BigDecimal.valueOf(mountUpdate)));
+      accountServiceImpl.updateAccountServide(accountUpdate).blockingAwait();
+    });
   }
 
   @Override
-  public void createWithDrawService(Movement movement) throws ErrorResponseException {
-    verifyTypeMovement(movement);
-    validateMovementNoNulls(movement);
-    validateMovementEmpty(movement);
-    verifyValues(movement);
-    validateAccountRegister(movement.getAccountId(), accountServiceImpl);
+  public Completable createWithDrawService(Movement movement) throws ErrorResponseException {
+    return Completable.fromAction(() -> {
+      validateMovementNoNulls(movement);
+      validateMovementEmpty(movement);
+      verifyValues(movement);
+      validateAccountRegister(movement.getAccountId(), accountServiceImpl);
 
-    List<Movement> listMovementByAccount = getMovementsByAccountIdService(movement.getAccountId());
-    Account accountFound = accountServiceImpl.getAccountByIdService(movement.getAccountId());
-    validateMovements(accountFound, listMovementByAccount);
+      List<Movement> listMovementByAccount = getMovementsByAccountIdService(movement.getAccountId()).blockingSingle();
+      Account accountFound = accountServiceImpl.getAccountByIdService(movement.getAccountId()).blockingGet();
 
-    movement.setId(Utilitarios.generateUuid());
-    movement.setFecha(LocalDateTime.now().toString());
-    //Validar que el monto de retiro, no sea más que el saldo total
-    if (accountFound.getCurrentBalance().doubleValue() < movement.getMount().doubleValue()) {
-      throw new ErrorResponseException(EX_ERROR_MOVEMENT_BALANCE_INSUFFICIENT,
-          HttpStatus.CONFLICT.value(), HttpStatus.CONFLICT);
-    }
-    movementRepository.save(movement);
-    //actualizar monto en cuenta bancaria
-    accountFound.setCurrentBalance(accountFound.getCurrentBalance().subtract(movement.getMount()));
-    accountServiceImpl.updateAccountServide(accountFound);
+      validateMovements(accountFound, listMovementByAccount, movement);
+      validateCurrentBalance(accountServiceImpl, movement);
+
+      movement.setId(Utilitarios.generateUuid());
+      movement.setFecha(LocalDateTime.now().toString());
+      movement.setTypeMovement(TypeMovement.RETIRO.toString());
+      movement.setFee(BigDecimal.valueOf(TRANSACTION_FEE_FREE));
+
+      movementRepository.save(movement);
+
+      //update mount in account bank
+      double mountUpdate = movement.getMount().doubleValue();
+      if (movement.getFee().doubleValue() == FEE_LIMIT_TRANSACTION) {
+        double feeTransaction = movement.getMount().doubleValue() * FEE_LIMIT_TRANSACTION;
+        mountUpdate = mountUpdate + feeTransaction;
+      }
+      accountFound.setCurrentBalance(accountFound.getCurrentBalance().subtract(BigDecimal.valueOf(mountUpdate)));
+      accountServiceImpl.updateAccountServide(accountFound).blockingAwait();
+    });
   }
 
   @Override
-  public List<Movement> getMovementsByAccountIdService(String accountId) throws ErrorResponseException {
-    validateAccountRegister(accountId, accountServiceImpl);
-    return movementRepository.findByAccountId(accountId);
+  public Completable createTransferService(Movement movement) throws ErrorResponseException {
+    return Completable.fromAction(() -> {
+      validateMovementTransferNoNulls(movement);
+      validateMovementEmpty(movement);
+      validateMovementTransferEmpty(movement);
+      verifyValues(movement);
+      validateAccountRegister(movement.getAccountId(), accountServiceImpl);
+      validateAccountDestination(movement.getDestination(), accountServiceImpl);
+      validateCurrentBalance(accountServiceImpl, movement);
+
+      movement.setId(Utilitarios.generateUuid());
+      movement.setFecha(LocalDateTime.now().toString());
+      movement.setTypeMovement(TypeMovement.TRANSFER.toString());
+      movement.setFee(BigDecimal.valueOf(TRANSACTION_FEE_FREE));
+
+      movementRepository.save(movement);
+
+      // updates account origin transfer
+      Account accountOrigin = accountServiceImpl.getAccountByIdService(movement.getAccountId()).blockingGet();
+      accountOrigin.setCurrentBalance(accountOrigin.getCurrentBalance().subtract((movement.getMount())));
+      accountServiceImpl.updateAccountServide(accountOrigin).blockingAwait();
+
+      // updates account destination transfer
+      Account accountDestination = accountServiceImpl.getAccountByIdService(movement.getDestination()).blockingGet();
+      accountDestination.setCurrentBalance(accountDestination.getCurrentBalance().add((movement.getMount())));
+      accountServiceImpl.updateAccountServide(accountDestination).blockingAwait();
+    });
   }
+
+  @Override
+  public Observable<List<Movement>> getMovementsByAccountIdService(String accountId) throws ErrorResponseException {
+    return Observable.defer(() -> {
+      validateAccountRegister(accountId, accountServiceImpl);
+      return Observable.just(movementRepository.findByAccountId(accountId));
+    });
+  }
+
 
 }

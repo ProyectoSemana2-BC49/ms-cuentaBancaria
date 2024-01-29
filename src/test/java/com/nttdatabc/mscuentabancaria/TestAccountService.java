@@ -43,7 +43,7 @@ public class TestAccountService {
     when(accountRepository.findAll()).thenReturn(Collections.singletonList(new Account()));
 
     // Act
-    List<Account> result = accountService.getAllAccountsService();
+    List<Account> result = accountService.getAllAccountsService().blockingFirst();
 
     // Assert
     assertNotNull(result);
@@ -73,7 +73,7 @@ public class TestAccountService {
     when(accountRepository.findByCustomerId("testCustomerId")).thenReturn(listAccountByCustomer);
 
     // Act
-    assertDoesNotThrow(() -> accountService.createAccountService(accountMock));
+    assertDoesNotThrow(() -> accountService.createAccountService(accountMock).blockingAwait());
 
     // Assert
     verify(accountRepository, times(1)).save(accountMock);
@@ -96,7 +96,7 @@ public class TestAccountService {
     when(accountRepository.findById("testAccountId")).thenReturn(existingAccount);
 
     // Act
-    assertDoesNotThrow(() -> accountService.updateAccountServide(accountToUpdate));
+    assertDoesNotThrow(() -> accountService.updateAccountServide(accountToUpdate).blockingAwait());
 
     // Assert
     verify(accountRepository, times(1)).findById("testAccountId");
@@ -115,7 +115,7 @@ public class TestAccountService {
     when(accountRepository.findById(testAccountId)).thenReturn(accountFindByIdOptional);
 
     // Act
-    assertDoesNotThrow(() -> accountService.deleteAccountByIdService(testAccountId));
+    assertDoesNotThrow(() -> accountService.deleteAccountByIdService(testAccountId).blockingAwait());
 
     // Assert
     verify(accountRepository, times(1)).findById(testAccountId);
@@ -134,7 +134,7 @@ public class TestAccountService {
     when(accountRepository.findById(testAccountId)).thenReturn(accountOptional);
 
     // Act
-    Account result = assertDoesNotThrow(() -> accountService.getAccountByIdService(testAccountId));
+    Account result = assertDoesNotThrow(() -> accountService.getAccountByIdService(testAccountId).blockingGet());
 
     // Assert
     assertNotNull(result);
@@ -157,7 +157,7 @@ public class TestAccountService {
     when(accountRepository.findByCustomerId(testCustomerId)).thenReturn(accountsList);
 
     // Act
-    List<Account> result = assertDoesNotThrow(() -> accountService.getAccountsByCustomerIdService(testCustomerId));
+    List<Account> result = assertDoesNotThrow(() -> accountService.getAccountsByCustomerIdService(testCustomerId).blockingSingle());
 
     // Assert
     assertNotNull(result);

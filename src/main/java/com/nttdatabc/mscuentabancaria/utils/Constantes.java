@@ -16,8 +16,8 @@ public class Constantes {
   public static Double VALUE_MIN_ACCOUNT_BANK = 0.0;
   public static final Double MAINTENANCE_FEE = 12.5;
   public static final Double MAINTENANCE_FEE_FREE = 0.0;
-  public static final Integer LIMIT_MAX_MOVEMENTS = 5;
-  public static final Integer LIMIT_MAX_FREE = 0;
+  public static final Double TRANSACTION_FEE_FREE = 0.0;
+  public static final Integer LIMIT_MAX_MOVEMENTS = 20;
   public static final String DAY_MOVEMENT_SELECTED = "22";
   public static final String EX_ERROR_TYPE_MOVEMENT = "Recuerda que solo existe el tipo RETIRO | DEPOSITO";
   public static final String EX_ERROR_CONFLICTO_CUSTOMER_PERSONA = "Este usuario ya tiene registrado alguna cuenta bancaria.";
@@ -29,4 +29,12 @@ public class Constantes {
   public static final String EX_ERROR_HAS_MOVEMENT_DAY = "Ya realizó el movimiento, recuerde que solo es 1 por día específico.";
   public static final String EX_ERROR_NOT_DAY_MOVEMENT = "Hoy no es el día especificado para hacer un movimiento en plazo fijo, recurde que son los días " + DAY_MOVEMENT_SELECTED + " de cada mes.";
   public static final String URL_CUSTOMER_ID = "http://localhost:8080/api/v1/customer/";
+  public static final String URL_CREDIT_CUSTOMER = "http://localhost:8080/api/v1/credits/customer/";
+  public static final Double MOUNT_MIN_OPEN_VIP = 500.0;
+  public static final String EMPRESA_NOT_PERMITTED_VIP = "Se necesita ser de tipo PERSONA, para crear VIP";
+  public static final String PERSONA_NOT_PERMITTED_VIP = "Se necesita ser de tipo Empresa, para crear Mype";
+  public static final String REQUIRED_CREDIT_VIP = "Se necesita tener tarjeta de crédito para crear cuenta.";
+  public static final String MOUNT_INSUFICIENT_CREATE_VIP = "Para abrir una cuenta vip se necesita aperturarla con un mínimo de S/ 500.00 soles";
+  public static final String REQUIRED_CUENTA_CORRIENTE = "Necesitas tener una cuenta corriente";
+  public static final Double FEE_LIMIT_TRANSACTION = 0.05; //5%
 }

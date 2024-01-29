@@ -1,14 +1,14 @@
 package com.nttdatabc.mscuentabancaria.utils;
 
-
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.DAY_MOVEMENT_SELECTED;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_HAS_MOVEMENT_DAY;
-import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_LIMIT_MAX_MOVEMENTS;
+import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_MOVEMENT_BALANCE_INSUFFICIENT;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_NOT_DAY_MOVEMENT;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_REQUEST;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_TYPE_MOVEMENT;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_ERROR_VALUE_MIN_MOVEMENT;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.EX_VALUE_EMPTY;
+import static com.nttdatabc.mscuentabancaria.utils.Constantes.FEE_LIMIT_TRANSACTION;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.LIMIT_MAX_MOVEMENTS;
 import static com.nttdatabc.mscuentabancaria.utils.Constantes.VALUE_MIN_ACCOUNT_BANK;
 
@@ -18,6 +18,7 @@ import com.nttdatabc.mscuentabancaria.model.TypeAccountBank;
 import com.nttdatabc.mscuentabancaria.model.TypeMovement;
 import com.nttdatabc.mscuentabancaria.service.AccountServiceImpl;
 import com.nttdatabc.mscuentabancaria.utils.exceptions.errors.ErrorResponseException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,7 +41,6 @@ public class MovementValidator {
   public static void validateMovementNoNulls(Movement movement) throws ErrorResponseException {
     Optional.of(movement)
         .filter(c -> c.getAccountId() != null)
-        .filter(c -> c.getTypeMovement() != null)
         .filter(c -> c.getMount() != null)
         .orElseThrow(() -> new ErrorResponseException(EX_ERROR_REQUEST,
             HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST));
@@ -55,7 +55,6 @@ public class MovementValidator {
   public static void validateMovementEmpty(Movement movement) throws ErrorResponseException {
     Optional.of(movement)
         .filter(c -> !c.getAccountId().isBlank())
-        .filter(c -> !c.getTypeMovement().isBlank())
         .filter(c -> !c.getMount().toString().isBlank())
         .orElseThrow(() -> new ErrorResponseException(EX_VALUE_EMPTY,
             HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST));
@@ -71,7 +70,8 @@ public class MovementValidator {
     Predicate<Movement> existTypeMovement = movementValidate -> movementValidate
         .getTypeMovement()
         .equalsIgnoreCase(TypeMovement.DEPOSITO.toString())
-        || movementValidate.getTypeMovement().equalsIgnoreCase(TypeMovement.RETIRO.toString());
+        || movementValidate.getTypeMovement().equalsIgnoreCase(TypeMovement.RETIRO.toString())
+        || movementValidate.getTypeMovement().equalsIgnoreCase(TypeMovement.TRANSFER.toString());
     if (existTypeMovement.negate().test(movement)) {
       throw new ErrorResponseException(EX_ERROR_TYPE_MOVEMENT,
           HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST);
@@ -86,7 +86,7 @@ public class MovementValidator {
    * @throws ErrorResponseException Si la cuenta no está registrada.
    */
   public static void validateAccountRegister(String accountId, AccountServiceImpl accountServiceImpl) throws ErrorResponseException {
-    accountServiceImpl.getAccountByIdService(accountId);
+    accountServiceImpl.getAccountByIdService(accountId).blockingGet();
   }
 
   /**
@@ -153,15 +153,19 @@ public class MovementValidator {
    * @param listMovementByAccount La lista de movimientos asociados a la cuenta.
    * @throws ErrorResponseException Si hay violaciones en las reglas de movimientos de la cuenta.
    */
-  public static void validateMovements(Account accountFound, List<Movement> listMovementByAccount) throws ErrorResponseException {
-    if (accountFound.getTypeAccount().equalsIgnoreCase(TypeAccountBank.AHORRO.toString())) {
+  public static void validateMovements(Account accountFound, List<Movement> listMovementByAccount, Movement movement) throws ErrorResponseException {
+    if (accountFound.getTypeAccount().equalsIgnoreCase(TypeAccountBank.AHORRO.toString())
+        || accountFound.getTypeAccount().equalsIgnoreCase(TypeAccountBank.PLAZO_FIJO.toString())
+        || accountFound.getTypeAccount().equalsIgnoreCase(TypeAccountBank.CORRIENTE.toString())) {
       List<Movement> listMovementByAccountByMonth = listMovementByMonth(listMovementByAccount);
 
       if (listMovementByAccountByMonth.size() >= LIMIT_MAX_MOVEMENTS) {
-        throw new ErrorResponseException(EX_ERROR_LIMIT_MAX_MOVEMENTS,
-            HttpStatus.CONFLICT.value(), HttpStatus.CONFLICT);
+        // apply fee when limit max movements
+        movement.setFee(BigDecimal.valueOf(FEE_LIMIT_TRANSACTION));
       }
-    } else if (accountFound.getTypeAccount().equalsIgnoreCase(TypeAccountBank.PLAZO_FIJO.toString())) {
+    }
+
+    if (accountFound.getTypeAccount().equalsIgnoreCase(TypeAccountBank.PLAZO_FIJO.toString())) {
       Boolean hasMovement = hasMovementInDay(listMovementByAccount);
       // Ya hizo el movimiento el día programado
       if (hasMovement) {
@@ -176,4 +180,61 @@ public class MovementValidator {
       }
     }
   }
+
+  /**
+   * Validate params not null.
+   *
+   * @param movement object movement.
+   * @throws ErrorResponseException error.
+   */
+  public static void validateMovementTransferNoNulls(Movement movement) throws ErrorResponseException {
+    Optional.of(movement)
+        .filter(c -> c.getAccountId() != null)
+        .filter(c -> c.getMount() != null)
+        .filter(c -> c.getDestination() != null)
+        .orElseThrow(() -> new ErrorResponseException(EX_ERROR_REQUEST,
+            HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST));
+  }
+
+  /**
+   * not empty.
+   *
+   * @param movement object.
+   * @throws ErrorResponseException error.
+   */
+  public static void validateMovementTransferEmpty(Movement movement) throws ErrorResponseException {
+    Optional.of(movement)
+        .filter(c -> !c.getAccountId().isBlank())
+        .filter(c -> !c.getMount().toString().isBlank())
+        .filter(c -> !c.getDestination().isBlank())
+        .orElseThrow(() -> new ErrorResponseException(EX_VALUE_EMPTY,
+            HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST));
+  }
+
+  /**
+   * Validate destination exist.
+   *
+   * @param accountId id.
+   * @param accountServiceImpl service.
+   * @throws ErrorResponseException error.
+   */
+  public static void validateAccountDestination(String accountId, AccountServiceImpl accountServiceImpl) throws ErrorResponseException {
+    accountServiceImpl.getAccountByIdService(accountId).blockingGet();
+  }
+
+  /**
+   * Balance insufficient.
+   *
+   * @param accountServiceImpl service.
+   * @param movement object.
+   * @throws ErrorResponseException err.
+   */
+  public static void validateCurrentBalance(AccountServiceImpl accountServiceImpl, Movement movement) throws ErrorResponseException {
+    Account accountFound = accountServiceImpl.getAccountByIdService(movement.getAccountId()).blockingGet();
+    if (accountFound.getCurrentBalance().doubleValue() < movement.getMount().doubleValue()) {
+      throw new ErrorResponseException(EX_ERROR_MOVEMENT_BALANCE_INSUFFICIENT,
+          HttpStatus.CONFLICT.value(), HttpStatus.CONFLICT);
+    }
+  }
+
 }
